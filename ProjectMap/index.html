@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { 
+            margin: 0; 
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        #map { 
+            height: 100%; 
+            width: 100%; 
+            display: none; 
+        }
+        #modal, #uploadMenu, #photoModal {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            flex-direction: column;
+            padding: 20px;
+        }
+        #registrationForm, #uploadForm {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 400px; /* Ограничиваем ширину для мобильных устройств */
+        }
+        #sidebar {
+            width: 200px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: white;
+            overflow-y: scroll;
+            padding: 10px;
+            display: none; /* Скрываем боковую панель по умолчанию */
+        }
+        #photos img {
+            width: 100%;
+            margin-bottom: 10px;
+            cursor: pointer; /* Указатель на картинках */
+        }
+        #photoModal img {
+            max-width: 90%;
+            max-height: 90%;
+        }
+        /* Адаптивные стили */
+        @media (max-width: 600px) {
+            #sidebar {
+                display: none; /* Скрываем боковую панель на мобильных */
+            }
+            #uploadMenu, #modal {
+                width: 90%; /* Ширина модальных окон на мобильных */
+            }
+            #modal h2, #uploadMenu h2 {
+                font-size: 1.5em; /* Увеличиваем заголовки для лучшей читабельности */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="modal">
+        <form id="registrationForm">
+            <h2>Регистрация</h2>
+            <label for="storage">Выберите хранилище:</label>
+            <select id="storage">
+                <option value="google">Google Drive</option>
+                <option value="icloud">iCloud</option>
+            </select>
+            <button type="submit">Зарегистрироваться</button>
+        </form>
+    </div>
+
+    <div id="uploadMenu" style="display: none;">
+        <h2>Загрузка фото</h2>
+        <input type="file" id="photoInput" accept="image/*" />
+        <button type="button" id="uploadButton">Загрузить фото</button>
+        <button type="button" id="closeUploadMenu">Закрыть</button>
+        <h2>Мои фото</h2>
+        <div id="photos"></div>
+    </div>
+
+    <div id="photoModal" style="display: none;">
+        <img id="fullImage" />
+        <button id="closePhotoModal">Закрыть</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([48.8566, 2.3522], 5);
+        let currentMarker = null; // Текущий маркер для добавления фото
+        let currentPhotos = []; // Массив для хранения фото для текущего города
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        function initializeMap() {
+            document.getElementById('modal').style.display = 'none'; // Скрыть модальное окно
+            document.getElementById('map').style.display = 'block'; // Показать карту
+            map.invalidateSize(); // Пересчитываем размеры карты
+        }
+
+        map.on('click', function(e) {
+            const { lat, lng } = e.latlng;
+            if (currentMarker) {
+                map.removeLayer(currentMarker); // Удаляем предыдущий маркер
+            }
+            currentMarker = L.marker([lat, lng]).addTo(map);
+            currentMarker.bindPopup('<b>Нажмите, чтобы загрузить фото</b>').openPopup();
+        });
+
+        // Обработчик клика на маркере
+        map.on('popupopen', function() {
+            document.getElementById('uploadMenu').style.display = 'flex'; // Показываем меню для загрузки фото
+            document.getElementById('photos').innerHTML = ''; // Очищаем фото при открытии
+            currentPhotos.forEach(photo => {
+                const img = document.createElement('img');
+                img.src = photo;
+                img.onclick = () => {
+                    document.getElementById('fullImage').src = photo;
+                    document.getElementById('photoModal').style.display = 'flex'; // Открываем модальное окно с фото
+                };
+                document.getElementById('photos').appendChild(img);
+            });
+        });
+
+        document.getElementById('uploadButton').onclick = function() {
+            const fileInput = document.getElementById('photoInput');
+            if (fileInput.files.length === 0 || !currentMarker) {
+                alert('Сначала выберите место на карте и загрузите фото.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const imgSrc = e.target.result;
+                currentPhotos.push(imgSrc); // Сохраняем фото в массив
+                const img = document.createElement('img');
+                img.src = imgSrc;
+                img.onclick = () => {
+                    document.getElementById('fullImage').src = imgSrc;
+                    document.getElementById('photoModal').style.display = 'flex'; // Открываем модальное окно с фото
+                };
+                document.getElementById('photos').appendChild(img);
+                currentMarker.bindPopup(`<b>Фото загружено!</b><br><img src="${img.src}" style="width:100%;">`).openPopup();
+            };
+
+            reader.readAsDataURL(file);
+            fileInput.value = ''; // Очищаем поле ввода
+        };
+
+        document.getElementById('registrationForm').onsubmit = function(e) {
+            e.preventDefault();
+            const storageType = document.getElementById('storage').value;
+            console.log('Выбрано хранилище:', storageType);
+            initializeMap(); // Показываем карту после регистрации
+        };
+
+        // Закрытие меню загрузки фото
+        document.getElementById('closeUploadMenu').onclick = function() {
+            document.getElementById('uploadMenu').style.display = 'none';
+            if (currentMarker) {
+                currentMarker.closePopup(); // Закрываем всплывающее окно маркера
+            }
+        };
+
+        // Закрытие модального окна с фото
+        document.getElementById('closePhotoModal').onclick = function() {
+            document.getElementById('photoModal').style.display = 'none';
+        };
+    </script>
+</body>
+</html>
+
